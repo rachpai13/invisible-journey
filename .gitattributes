@@ -1,0 +1,3 @@
+# Keep the Gradle launch scripts runnable on every OS.
+gradlew text eol=lf
+*.bat text eol=crlf

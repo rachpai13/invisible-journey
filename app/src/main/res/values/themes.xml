@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.InvisibleJourney" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF0A0A0A</item>
+        <item name="android:statusBarColor">#FF0A0A0A</item>
+        <item name="android:navigationBarColor">#FF0A0A0A</item>
+    </style>
+</resources>

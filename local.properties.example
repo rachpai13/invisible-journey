@@ -1,0 +1,4 @@
+# Copy to local.properties (Android Studio fills sdk.dir automatically).
+# Optional, free key from https://developer.tomtom.com (no card needed).
+# Leave empty to use the "estimated" congestion fallback.
+TOMTOM_API_KEY=

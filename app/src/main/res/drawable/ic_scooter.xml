@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Scooter seen head-on, for the rider button. From "glyphs:scooter-bold" by Goran Spasojevic
+  (github.com/gorango/glyphs, MIT licence), cropped to fill the icon box. Tinted by the caller.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <group
+        android:translateX="-7.5"
+        android:translateY="-7">
+        <!-- Body (solid) -->
+        <path
+            android:fillColor="#FF000000"
+            android:fillType="evenOdd"
+            android:pathData="M27.5,30.864c0,-3.083 1.76,-5.82 4.41,-7.15A9.49,9.49 0,0 0,39.5 27.5a9.48,9.48 0,0 0,7.28 -3.396a8,8 0,0 1,3.72 6.76V47.5c0,2.984 -1.136,5.703 -3,7.747V52a9,9 0,0 0,-18 0v1.982a11.45,11.45 0,0 1,-2 -6.483z" />
+        <!-- Body (outline) -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M31.91,23.713l2.395,-1.806a3,3 0,0 0,-3.741 -0.875zM46.78,24.103l1.605,-2.534a3,3 0,0 0,-3.903 0.606zM47.5,55.246h-3a3,3 0,0 0,5.217 2.02zM29.5,53.982l-2.477,1.693a3,3 0,0 0,5.477 -1.693zM30.564,21.032a11,11 0,0 0,-6.064 9.832h6a5,5 0,0 1,2.756 -4.47zM39.5,24.5a6.49,6.49 0,0 1,-5.195 -2.593l-4.79,3.613A12.49,12.49 0,0 0,39.5 30.5zM44.482,22.175A6.48,6.48 0,0 1,39.5 24.5v6a12.48,12.48 0,0 0,9.578 -4.468zM53.5,30.865c0,-3.863 -2.008,-7.327 -5.115,-9.296l-3.21,5.069a5,5 0,0 1,2.325 4.226zM53.5,47.5V30.864h-6V47.5zM49.717,57.267a14.46,14.46 0,0 0,3.783 -9.768h-6a8.46,8.46 0,0 1,-2.217 5.725zM44.5,52v3.246h6V52zM38.5,46a6,6 0,0 1,6 6h6c0,-6.627 -5.373,-12 -12,-12zM32.5,52a6,6 0,0 1,6 -6v-6c-6.627,0 -12,5.373 -12,12zM32.5,53.982V52h-6v1.982zM24.5,47.499c0,3.028 0.931,5.848 2.523,8.176l4.954,-3.386a8.45,8.45 0,0 1,-1.477 -4.79zM24.5,30.864V47.5h6V30.864z" />
+        <!-- Handlebar -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M24.5,14H34.044A7.5,7.5 0,0 0,34.044 22H24.5A4,4 0,0 1,24.5 14ZM44.956,14H54.5A4,4 0,0 1,54.5 22H44.956A7.5,7.5 0,0 0,44.956 14Z" />
+        <!-- Headlight -->
+        <path
+            android:pathData="M39.5,12a6,6 0,1 1,0 12a6,6 0,1 1,0 -12z"
+            android:strokeWidth="5"
+            android:strokeColor="#FF000000" />
+        <!-- Front wheel -->
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M38.5,48a4,4 0,0 1,4 4v12a4,4 0,0 1,-8 0v-12a4,4 0,0 1,4 -4z" />
+    </group>
+</vector>

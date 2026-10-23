@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Parcel on its way, for the customer button. Based on "carbon:delivery-parcel" by IBM
+  (Carbon Design System, Apache 2.0 licence), made bold to match the scooter: heavier rounded
+  strokes and a solid side face. Tinted by the caller.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <!-- Solid side face -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M19,15.4L29.2,9.8V22.4L19,28Z"
+        android:strokeWidth="2.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineJoin="round" />
+    <!-- Lid and the open front edge -->
+    <path
+        android:pathData="M8.8,9.8L19,4.2L29.2,9.8L19,15.4ZM14.6,25.6L19,28"
+        android:strokeWidth="2.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Speed lines -->
+    <path
+        android:pathData="M3,15H9.5M7,19H13M5,23H11.5"
+        android:strokeWidth="2.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round" />
+</vector>
