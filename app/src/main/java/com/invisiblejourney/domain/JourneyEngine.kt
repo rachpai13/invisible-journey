@@ -3,6 +3,7 @@ package com.invisiblejourney.domain
 import com.invisiblejourney.domain.model.BumpKind
 import com.invisiblejourney.domain.model.ConditionReading
 import com.invisiblejourney.domain.model.CongestionSegment
+import com.invisiblejourney.domain.model.GasReading
 import com.invisiblejourney.domain.model.JourneyRecord
 import com.invisiblejourney.domain.model.LatLng
 import com.invisiblejourney.domain.model.MeterState
@@ -19,6 +20,7 @@ import com.invisiblejourney.domain.model.StopType
 import com.invisiblejourney.domain.model.TrackPoint
 import com.invisiblejourney.domain.processor.CongestionProcessor
 import com.invisiblejourney.domain.processor.DistanceProcessor
+import com.invisiblejourney.domain.processor.Mq2
 import com.invisiblejourney.domain.processor.Geo
 import com.invisiblejourney.domain.processor.BumpClassifier
 import com.invisiblejourney.domain.processor.BumpDetector
@@ -72,6 +74,8 @@ class JourneyEngine(
     private val roughness = mutableListOf<RoughnessWindow>()
     private val congestion = mutableListOf<CongestionSegment>()
     private val conditions = mutableListOf<ConditionReading>()
+    private val gas = mutableListOf<GasReading>()
+    private var gasNow: GasReading? = null
     private val snapshots = mutableListOf<MeterState>()
 
     private var speedKmh = 0f
@@ -86,6 +90,7 @@ class JourneyEngine(
     private var heatMs = 0L
     private var rainMs = 0L
     private var aqiMs = 0.0 // Σ AQI × ms
+    private var gasPpmMs = 0.0 // Σ excess gas ppm × ms
 
     private var nextStopId = 1
     private var nextSegmentId = 1
@@ -169,6 +174,19 @@ class JourneyEngine(
         conditions += reading
     }
 
+    /**
+     * An MQ-2 reading from the ESP32 module ([ratio] = Rs/R0). Counts in every phase: the rider
+     * breathes the air at the store and the gate too. Readings that can't be real are dropped.
+     */
+    fun onGas(t: Long, ratio: Float) {
+        if (phase.isFinal) return
+        val excess = Mq2.excessPpm(ratio) ?: return
+        val r = GasReading(t, ratio, excess)
+        gasNow = r
+        // The live value updates every reading; the stored trace keeps one every GAS_STORE_EVERY_MS.
+        if (gas.isEmpty() || t - gas.last().t >= GAS_STORE_EVERY_MS) gas += r
+    }
+
     fun onSignalResult(stopId: Int, isSignal: Boolean) {
         if (!isSignal) return
         val i = stops.indexOfFirst { it.id == stopId }
@@ -208,6 +226,7 @@ class JourneyEngine(
             if (c.raining) rainMs += dt
             c.aqi?.let { aqiMs += it.toDouble() * dt }
         }
+        freshGas(t)?.let { gasPpmMs += it.excessPpm.toDouble() * dt }
         if (t - lastSnapshot >= snapshotEveryMs) {
             lastSnapshot = t
             snapshots += meter(t)
@@ -229,6 +248,11 @@ class JourneyEngine(
         val km = (distance.totalM / 1000.0).toFloat()
         val c = conditions.lastOrNull()
         val lastSeg = congestion.lastOrNull()
+        val waitStart = when {
+            phase.riding -> stopDetector.stoppedSince()?.takeIf { now - it >= SHOW_WAIT_AFTER_MS }
+            phase.isFinal -> null
+            else -> phases.last().t // at the store or the door the whole phase is a wait
+        }
 
         return MeterState(
             t = now,
@@ -256,8 +280,15 @@ class JourneyEngine(
             heatMinutes = heatMs / 60_000f,
             rainMinutes = rainMs / 60_000f,
             location = location,
+            waitingNow = waitStart != null,
+            currentWaitMs = waitStart?.let { (now - it).coerceAtLeast(0) } ?: 0L,
+            gasPpm = freshGas(now)?.excessPpm,
+            gasPpmMinutes = (gasPpmMs / 60_000.0).toFloat(),
         )
     }
+
+    /** The latest MQ-2 reading, unless the module went quiet (out of range, unplugged). */
+    private fun freshGas(now: Long): GasReading? = gasNow?.takeIf { now - it.t <= GAS_STALE_MS }
 
     fun record(): JourneyRecord {
         val final = if (phase.isFinal) meter(endedAt ?: lastTick) else null
@@ -277,9 +308,10 @@ class JourneyEngine(
             roughness = roughness.toList(),
             congestion = congestion.toList(),
             conditions = conditions.toList(),
+            gas = gas.toList(),
             snapshots = snapshots.toList(),
             summary = if (phase == Phase.DELIVERED && final != null) {
-                SummaryBuilder.build(final, promisedEtaMin, roughness, congestion, conditions)
+                SummaryBuilder.build(final, promisedEtaMin, roughness, congestion, conditions, gas)
             } else {
                 null
             },
@@ -310,5 +342,10 @@ class JourneyEngine(
 
     companion object {
         const val HEAT_THRESHOLD_C = 35f
+
+        /** Below walking pace this long before the meter shows it as a wait (filters rolling slowly in traffic). */
+        const val SHOW_WAIT_AFTER_MS = 5_000L
+        const val GAS_STALE_MS = 15_000L
+        const val GAS_STORE_EVERY_MS = 10_000L
     }
 }

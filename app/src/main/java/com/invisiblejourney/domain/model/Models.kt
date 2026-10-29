@@ -162,6 +162,18 @@ data class ConditionReading(
     }
 }
 
+/**
+ * One MQ-2 reading from the ESP32 module. [ratio] is Rs/R0 (clean air ≈ 9.83, lower = more gas);
+ * [excessPpm] is the smoke-equivalent ppm above clean air (see `Mq2`): an indicator, not a measurement.
+ */
+@Serializable
+data class GasReading(
+    val t: Long,
+    val ratio: Float,
+    val excessPpm: Float,
+    val source: SourceTag = SourceTag.ESP32,
+)
+
 /** Everything the meter shows at one instant. Snapshots of this power replay. */
 @Serializable
 data class MeterState(
@@ -192,6 +204,14 @@ data class MeterState(
     val heatMinutes: Float,
     val rainMinutes: Float,
     val location: LatLng?,
+    /** True while the rider is stopped: a stop on the road (after a few seconds), or waiting at the store / door. */
+    val waitingNow: Boolean = false,
+    /** How long the current wait has lasted; 0 while moving. */
+    val currentWaitMs: Long = 0,
+    /** Exhaust/smoke above clean air from the ESP32's MQ-2 (smoke-equivalent ppm); null with no module. */
+    val gasPpm: Float? = null,
+    /** Σ gasPpm × minutes: how much of it the rider has ridden through so far. */
+    val gasPpmMinutes: Float = 0f,
 )
 
 @Serializable
@@ -214,6 +234,9 @@ data class JourneySummary(
     val aqiMinutes: Float,
     val avgAqi: Int?,
     val storyLines: List<String>,
+    /** From the ESP32's MQ-2; null when no module was connected. */
+    val avgGasPpm: Float? = null,
+    val gasPpmMinutes: Float? = null,
 )
 
 /** The whole journey: on-disk storage format and the shareable export format. */
@@ -236,6 +259,7 @@ data class JourneyRecord(
     val roughness: List<RoughnessWindow> = emptyList(),
     val congestion: List<CongestionSegment> = emptyList(),
     val conditions: List<ConditionReading> = emptyList(),
+    val gas: List<GasReading> = emptyList(),
     val snapshots: List<MeterState> = emptyList(),
     val summary: JourneySummary? = null,
 ) {

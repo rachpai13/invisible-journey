@@ -7,6 +7,7 @@ import com.invisiblejourney.data.remote.OverpassApi
 import com.invisiblejourney.data.remote.TomTomTrafficApi
 import com.invisiblejourney.data.sensors.GpsSource
 import com.invisiblejourney.data.sensors.ImuSource
+import com.invisiblejourney.data.sensors.esp32.Esp32Link
 import com.invisiblejourney.domain.model.MountType
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -31,6 +32,8 @@ class AppContainer(context: Context) {
     val tomTom = TomTomTrafficApi(http, BuildConfig.TOMTOM_API_KEY)
     val gps = GpsSource(app)
     val imu = ImuSource(app)
+    /** The optional ESP32 meter module (display, LEDs, MQ-2); connected only while a journey records. */
+    val esp32 = Esp32Link(app)
     val settings = Settings(app)
 
     companion object {

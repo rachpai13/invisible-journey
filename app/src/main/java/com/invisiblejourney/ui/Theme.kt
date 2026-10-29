@@ -154,7 +154,7 @@ object PhaseText {
     /** What the rider confirms to move on from [phase]. */
     fun action(phase: Phase): String = when (phase) {
         Phase.ASSIGNED -> "Reached store"
-        Phase.AT_STORE -> "Picked up · ride"
+        Phase.AT_STORE -> "Picked up"
         Phase.EN_ROUTE -> "Reached drop"
         Phase.ARRIVED -> "Delivered"
         Phase.DELIVERED, Phase.CANCELLED -> "Done"

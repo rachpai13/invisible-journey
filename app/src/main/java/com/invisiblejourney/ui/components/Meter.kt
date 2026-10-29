@@ -60,6 +60,7 @@ import com.invisiblejourney.domain.model.Phase
 import com.invisiblejourney.domain.model.SourceTag
 import com.invisiblejourney.domain.model.StopType
 import com.invisiblejourney.domain.processor.IndianAqi
+import com.invisiblejourney.domain.processor.Mq2
 import com.invisiblejourney.ui.Format
 import com.invisiblejourney.ui.Num
 import com.invisiblejourney.ui.Palette
@@ -306,7 +307,13 @@ fun ConditionStrip(meter: MeterState, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
         Condition(R.drawable.ic_cond_heat, "Feels like", feels?.let { "${it.roundToInt()}°" } ?: "—")
         Condition(R.drawable.ic_cond_rain, "Rain", if (feels == null) "—" else if (meter.raining) "Rain" else "Dry")
-        Condition(R.drawable.ic_cond_air, "Air quality", aqi?.let { "AQI $it" } ?: "—")
+        // The bike's own gas sensor (ESP32 MQ-2) beats the city-grid AQI when it's connected.
+        val gas = meter.gasPpm
+        if (gas != null) {
+            Condition(R.drawable.ic_cond_air, "Exhaust and smoke, ${Mq2.level(gas)}, estimated", "${gas.roundToInt()} ppm")
+        } else {
+            Condition(R.drawable.ic_cond_air, "Air quality", aqi?.let { "AQI $it" } ?: "—")
+        }
         Condition(
             R.drawable.ic_cond_traffic, "Traffic",
             when {

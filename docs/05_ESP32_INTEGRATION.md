@@ -1,6 +1,8 @@
 # 05 — ESP32 Integration
 
 > **Status:** the ESP32's exact job is **not decided yet**. This doc defines a connection, protocol and app-side design that works **whatever the ESP32 ends up doing**, so the hardware can be added late without rewriting the app.
+>
+> **Built so far: the IJ Meter module** (`firmware/IJ_Meter/IJ_Meter.ino`): role **C** plus a gas sensor. A 4-digit 7-segment display shows the ETA counting down while the rider moves (green LED) and the current wait counting up while they are stopped (red LED blinking); an MQ-2 streams `GAS` packets that the app turns into exhaust/smoke exposure. It uses `DISPLAY_STATE` (0x13) and `GAS` (0x06) below; see [IJ Meter module](#ij-meter-module-built).
 
 ## What the ESP32 could do (candidates)
 
@@ -81,6 +83,7 @@ All multi-byte fields are **little-endian**. Every packet starts with an 8-byte 
 | `0x03` | `ENV` | `int16 temp_c×100`, `uint16 rh×100`, `uint32 pressure_pa` | 0.2–1 Hz |
 | `0x04` | `AIR` | `uint16 pm1_0`, `uint16 pm2_5`, `uint16 pm10` (µg/m³) | 0.2–1 Hz |
 | `0x05` | `BUTTON` | `uint8 button_id`, `uint8 action` (1 press, 2 long) | on event |
+| `0x06` | `GAS` | `uint16 adc_raw`, `uint16 millivolts`, `uint16 rs_r0×1000` (MQ-2 Rs/R0), `uint8 flags` (bit0 heater warm, bit1 R0 calibrated) | 0.5 Hz |
 | `0x10` | `IMU_RAW` | `uint8 n`, then `n × (int16 ax, ay, az)` in mg | only in calibration mode |
 | `0x7F` | `HEARTBEAT` | — | 0.2 Hz |
 
@@ -100,6 +103,7 @@ Format: `uint8 opcode` + payload.
 | `0x10` | `METER_UPDATE` | `uint8 phase`, `uint32 distance_m`, `uint16 moving_s`, `uint16 waiting_s`, `uint8 potholes`, `int16 temp_c×10`, `uint16 aqi` (for role C/D) |
 | `0x11` | `DISPLAY_TEXT` | UTF-8 string ≤ 64 bytes |
 | `0x12` | `ALERT` | `uint8 kind` (pothole, rain, heat…) for vibration/LED feedback |
+| `0x13` | `DISPLAY_STATE` | `uint8 mode` (0 idle, 1 moving, 2 waiting, 3 finished), `int32 eta_left_s` (negative = late), `uint32 wait_s` (this wait), `uint32 elapsed_s`, `uint8 rate` (journey s per real s; >1 in demo rides). Sent 1 Hz; the module ticks on by itself in between |
 
 ### `Status` (notify, 4 bytes)
 
@@ -221,6 +225,26 @@ lib_deps =
   adafruit/Adafruit MPU6050
   adafruit/Adafruit BME280 Library
 ```
+
+---
+
+## IJ Meter module (built)
+
+| Part | ESP32 pin |
+|---|---|
+| 5461AS segments a b c d e f g dp (330 Ω each) | 13 14 27 26 25 33 32 23 |
+| 5461AS digit commons D1–D4 | 18 19 21 22 |
+| Red LED (330 Ω) / green LED (330 Ω) | 4 / 5 |
+| MQ-2 A0 (D0 unused) | 34 |
+| BOOT button: hold 2 s to calibrate MQ-2 R0 in clean air | 0 |
+
+**Display:** `m.ss` with the dot after digit 2 (` 7.42`); late `-1.15`, 10+ min late ` -12` (minutes); 100+ min `1h40`; no phone `----`. A finished journey stays on the display after the phone disconnects.
+
+**When is the rider "waiting"?** `MeterState.waitingNow`: on the road, below walking pace for 5 s (`JourneyEngine.SHOW_WAIT_AFTER_MS`); at the store and at the door, the whole phase. The wait counts from the moment they slowed down. A road stop only goes into the waiting totals once it lasts 20 s (`StopDetector`), so a 10 s pause shows red on the module but stays in moving time.
+
+**MQ-2 → pollution** (`domain/processor/GasExposure.kt`, `Mq2`): Rs/R0 → the datasheet smoke curve `ppm = 1200·(Rs/R0)^-1.9` → minus clean air (Rs/R0 = 9.83, ≈ 15.6 ppm) = **ppm above clean air**, shown live on the air chip and integrated as **ppm·min** (`MeterState.gasPpmMinutes`, `JourneySummary.gasPpmMinutes`), the same way AQI-minutes are counted. The MQ-2 can't tell gases apart and has no official scale, so it is labelled an estimate everywhere; readings before warm-up or calibration are dropped.
+
+**App side:** `data/sensors/esp32/Esp32Protocol.kt` (packets, unit-tested), `Esp32Link.kt` (plain Android `BluetoothGatt`, no library: scans for the service UUID, connects to the first module, reconnects on drop). `JourneyRecorder` starts it with each journey; the live screen's top bar shows its status. No pairing screen yet: it takes the first module it finds.
 
 ---
 

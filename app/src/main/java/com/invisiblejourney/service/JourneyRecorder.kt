@@ -2,8 +2,11 @@ package com.invisiblejourney.service
 
 import com.invisiblejourney.AppContainer
 import com.invisiblejourney.data.RideLogger
+import com.invisiblejourney.data.sensors.esp32.Esp32Link
+import com.invisiblejourney.data.sensors.esp32.Esp32Protocol
 import com.invisiblejourney.domain.EngineRequests
 import com.invisiblejourney.domain.JourneyEngine
+import com.invisiblejourney.domain.MeterDisplay
 import com.invisiblejourney.domain.SampleJourneys
 import com.invisiblejourney.domain.model.BumpKind
 import com.invisiblejourney.domain.model.MeterState
@@ -38,6 +41,8 @@ data class ActiveJourneyState(
     val finished: Boolean = false,
     /** True when the sensor data comes from a scripted simulated ride, not the phone's sensors. */
     val simulated: Boolean = false,
+    /** The ESP32 meter module's link. */
+    val module: Esp32Link.State = Esp32Link.State.OFF,
 )
 
 /** Process-wide handle on the journey being recorded (the service owns the recorder). */
@@ -114,6 +119,7 @@ class JourneyRecorder(
 
     fun start() {
         publish()
+        startModule()
         val sim = simulation
         if (sim != null) {
             scope.launch { runSimulation(sim) }
@@ -149,6 +155,7 @@ class JourneyRecorder(
             while (isActive) {
                 engine.onTick(now())
                 publish()
+                sendDisplay()
                 delay(1_000L / speed)
             }
         }
@@ -164,6 +171,25 @@ class JourneyRecorder(
                 if (fetchConditions()) delay(10 * 60_000L / speed) else delay(10_000)
             }
         }
+    }
+
+    /**
+     * The ESP32 module, if there is one: its MQ-2 readings feed the engine, and the 1 Hz clock sends
+     * it the display state. Works in demo rides too (the gas sensor is real even when the ride isn't).
+     */
+    private fun startModule() {
+        container.esp32.start()
+        scope.launch {
+            container.esp32.packets.collect { p ->
+                if (p is Esp32Protocol.Gas && p.usable) engine.onGas(now(), p.ratio)
+            }
+        }
+        scope.launch { container.esp32.state.collect { publish() } }
+    }
+
+    private fun sendDisplay() {
+        val d = MeterDisplay.from(engine.meter(), engine.promisedEtaMin)
+        container.esp32.sendDisplay(Esp32Protocol.displayState(d, speed))
     }
 
     /** Rider tapped the phase button. Ignored in a simulated ride, where the script advances phases. */
@@ -230,6 +256,8 @@ class JourneyRecorder(
         runCatching { container.store.save(record) }
         container.store.refresh()
         ActiveJourney.mutable.value = ActiveJourney.mutable.value?.copy(meter = engine.meter(), finished = true)
+        sendDisplay() // the module holds the final time
+        container.esp32.stop()
         onFinished(record.id)
         scope.cancel()
         executor.shutdown()
@@ -244,6 +272,7 @@ class JourneyRecorder(
                     container.store.save(engine.record())
                 }
             }
+            container.esp32.stop()
             scope.cancel()
             executor.shutdown()
         }
@@ -258,6 +287,7 @@ class JourneyRecorder(
             trafficApi = container.tomTom.isConfigured,
             finished = engine.phase.isFinal,
             simulated = simulation != null,
+            module = container.esp32.state.value,
         )
     }
 

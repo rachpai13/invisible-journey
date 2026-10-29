@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.foundation.layout.aspectRatio
@@ -33,8 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -63,7 +59,8 @@ fun ModeSelectScreen(onRider: () -> Unit, onCustomer: () -> Unit) {
             letterSpacing = 1.8.sp,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(10.dp))
+        // Wider gap under the label than under the heading, so the heading and its line read as one block.
+        Spacer(Modifier.height(16.dp))
         Text(
             "Know your service better",
             fontSize = 28.sp,
@@ -71,7 +68,7 @@ fun ModeSelectScreen(onRider: () -> Unit, onCustomer: () -> Unit) {
             letterSpacing = (-0.8).sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             "Exposing to you what it takes from the gig economy to deliver your order on an instant basis.",
             color = Palette.Muted,
@@ -120,9 +117,6 @@ private val brands = listOf(
 
 private val TileSize = 60.dp
 private val HubSize = 88.dp
-
-/** Partner logos are shown without colour, so the app's own yellow dial is the only colour in the header. */
-private val greyscale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
 
 /** Header card: the app's dial in the middle, wired to the instant-delivery apps whose riders it measures. */
 @Composable
@@ -196,7 +190,6 @@ private fun BrandTile(b: Brand, modifier: Modifier) {
             contentDescription = b.name,
             modifier = Modifier.fillMaxSize(),
             contentScale = if (b.fill) ContentScale.Crop else ContentScale.Fit,
-            colorFilter = greyscale,
         )
     }
 }
@@ -229,7 +222,6 @@ private fun RoleCard(
                 FitText(title, maxSize = 19.sp, minSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 FitText(sub, maxSize = 14.sp, minSize = 10.sp, color = content.copy(alpha = 0.7f))
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(24.dp))
         }
     }
 }

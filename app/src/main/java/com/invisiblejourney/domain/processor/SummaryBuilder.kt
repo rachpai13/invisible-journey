@@ -2,6 +2,7 @@ package com.invisiblejourney.domain.processor
 
 import com.invisiblejourney.domain.model.ConditionReading
 import com.invisiblejourney.domain.model.CongestionSegment
+import com.invisiblejourney.domain.model.GasReading
 import com.invisiblejourney.domain.model.JourneySummary
 import com.invisiblejourney.domain.model.MeterState
 import com.invisiblejourney.domain.model.Roughness
@@ -20,6 +21,7 @@ object SummaryBuilder {
         roughness: List<RoughnessWindow>,
         congestion: List<CongestionSegment>,
         conditions: List<ConditionReading>,
+        gas: List<GasReading> = emptyList(),
     ): JourneySummary {
         val min = { ms: Long -> ms / 60_000f }
         val waitingByType = m.waitingByType.mapValues { min(it.value) }
@@ -39,6 +41,7 @@ object SummaryBuilder {
         val maxFeelsLike = conditions.mapNotNull { it.feelsLikeC ?: it.tempC }.maxOrNull()
         val aqiValues = conditions.mapNotNull { it.aqi }
         val avgAqi = if (aqiValues.isNotEmpty()) aqiValues.average().roundToInt() else null
+        val avgGas = if (gas.isNotEmpty()) gas.map { it.excessPpm }.average().toFloat() else null
 
         val actualMin = min(m.elapsedMs)
         val lines = mutableListOf<String>()
@@ -71,6 +74,9 @@ object SummaryBuilder {
         if (avgAqi != null && avgAqi > 100) {
             lines += "They breathed air with AQI $avgAqi (${IndianAqi.category(avgAqi)}) for ${fmt(actualMin)} min."
         }
+        if (avgGas != null && avgGas >= 25f) {
+            lines += "A sensor on the bike picked up ${Mq2.level(avgGas).lowercase()} exhaust and smoke, about ${avgGas.roundToInt()} ppm above clean air (an estimate)."
+        }
         waitingByType[StopType.GATE_OR_DOOR_WAIT]?.takeIf { it >= 0.5f }?.let {
             lines += "${fmt(it)} min getting past the gate, the lift and the stairs to your door."
         }
@@ -94,6 +100,8 @@ object SummaryBuilder {
             aqiMinutes = m.aqiMinutes,
             avgAqi = avgAqi,
             storyLines = lines,
+            avgGasPpm = avgGas,
+            gasPpmMinutes = if (gas.isNotEmpty()) m.gasPpmMinutes else null,
         )
     }
 

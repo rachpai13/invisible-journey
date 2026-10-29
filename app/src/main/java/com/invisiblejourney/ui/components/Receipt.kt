@@ -215,6 +215,14 @@ private fun receiptItems(s: JourneySummary, avgKmh: Float?, congestionEstimated:
         ),
         Item("Rain", if (s.rainMinutes >= 0.5f) Format.minutes(s.rainMinutes) else if (s.maxFeelsLikeC == null) "—" else "Dry"),
         Item("Air quality", s.avgAqi?.let { "AQI $it" } ?: "—"),
+    ) + listOfNotNull(
+        // Only with the ESP32 module: the MQ-2 on the bike, as ppm above clean air × minutes.
+        s.gasPpmMinutes?.let { dose ->
+            Item(
+                "Exhaust and smoke", "${dose.roundToInt()} ppm·min",
+                listOfNotNull(s.avgGasPpm?.let { "avg ${it.roundToInt()} ppm above clean air" }, "sensor on the bike, estimated"),
+            )
+        },
     )
 }
 

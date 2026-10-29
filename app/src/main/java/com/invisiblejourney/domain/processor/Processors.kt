@@ -72,6 +72,9 @@ class StopDetector(
         return if (now - s >= minStopMs) s else null
     }
 
+    /** When the rider dropped below walking pace, even if it's too soon to count as a stop; null while moving. */
+    fun stoppedSince(): Long? = candidateStart
+
     /** Returns a completed stop when the rider starts moving again. */
     fun update(t: Long, speedKmh: Float, lat: Double, lng: Double): Stop? {
         val start = candidateStart

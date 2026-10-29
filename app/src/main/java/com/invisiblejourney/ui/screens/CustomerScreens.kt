@@ -1,5 +1,7 @@
 package com.invisiblejourney.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.IconButton
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -107,6 +109,12 @@ fun LibraryScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val items by store.items.collectAsState()
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(true) }
+    // Long-press a journey to start selecting; taps then toggle. Samples are built in and can't be deleted.
+    var selected by remember { mutableStateOf(emptySet<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val selecting = selected.isNotEmpty()
+    fun toggle(id: String) { selected = if (id in selected) selected - id else selected + id }
+    BackHandler(enabled = selecting) { selected = emptySet() }
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -122,7 +130,15 @@ fun LibraryScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        TopBar("See a journey", onBack)
+        if (selecting) {
+            TopBar("${selected.size} selected", onBack = { selected = emptySet() }) {
+                IconButton(onClick = { confirmDelete = true }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete selected journeys", modifier = Modifier.size(26.dp))
+                }
+            }
+        } else {
+            TopBar("See a journey", onBack)
+        }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.Gutter),
             verticalArrangement = Arrangement.spacedBy(Dimens.Gap),
@@ -146,7 +162,15 @@ fun LibraryScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                     },
                     late = j.actualMin?.let { it > j.promisedEtaMin },
                     tag = if (j.isSample) ({ Tag("SAMPLE") }) else null,
-                    onClick = { onOpen(j.id) },
+                    onClick = {
+                        when {
+                            !selecting -> onOpen(j.id)
+                            !j.isSample -> toggle(j.id)
+                        }
+                    },
+                    onLongClick = if (j.isSample) null else ({ toggle(j.id) }),
+                    selecting = selecting,
+                    selected = j.id in selected,
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -159,6 +183,26 @@ fun LibraryScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 onClick = { importer.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
             )
         }
+    }
+
+    if (confirmDelete) {
+        val n = selected.size
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(if (n == 1) "Delete this journey?" else "Delete $n journeys?") },
+            text = { Text("This removes the recordings from this phone. Files you already shared aren't affected.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    val ids = selected
+                    scope.launch {
+                        ids.forEach { store.delete(it) }
+                        selected = emptySet()
+                    }
+                }, modifier = Modifier.height(48.dp)) { Text("Delete", color = Palette.Danger) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }, modifier = Modifier.height(48.dp)) { Text("Keep") } },
+        )
     }
 }
 

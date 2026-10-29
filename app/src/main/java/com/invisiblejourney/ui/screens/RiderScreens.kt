@@ -1,5 +1,7 @@
 package com.invisiblejourney.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -45,7 +47,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -65,12 +66,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
@@ -93,7 +100,9 @@ import com.invisiblejourney.ui.components.EffortChart
 import com.invisiblejourney.ui.components.FitText
 import com.invisiblejourney.ui.components.MeterDial
 import com.invisiblejourney.ui.components.PhaseStepper
+import com.invisiblejourney.ui.components.StatusLight
 import com.invisiblejourney.ui.components.SwipeToConfirm
+import com.invisiblejourney.data.sensors.esp32.Esp32Link
 import com.invisiblejourney.ui.components.TopBar
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -102,6 +111,13 @@ import kotlin.math.roundToInt
 
 private fun hasLocation(context: Context) =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+/** Bluetooth runtime permissions for the ESP32 meter module (Android 12+; older versions use location). */
+private val BLUETOOTH_PERMISSIONS =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT) else emptyArray()
+
+private fun hasBluetooth(context: Context) =
+    BLUETOOTH_PERMISSIONS.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
 
 /** ETAs a quick-commerce app typically promises; the slider snaps to these. */
 private val ETA_STOPS = listOf(5, 10, 15, 20, 25, 30)
@@ -128,11 +144,14 @@ fun RiderHomeScreen(onBack: () -> Unit, onLive: () -> Unit, onHistory: () -> Uni
             add(Manifest.permission.ACCESS_FINE_LOCATION)
             add(Manifest.permission.ACCESS_COARSE_LOCATION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+            addAll(BLUETOOTH_PERMISSIONS)
         }.toTypedArray()
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         granted = hasLocation(context)
     }
+    // The module is optional: the journey starts either way and connects once Bluetooth is allowed.
+    val bluetoothLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
 
     val running = active?.let { !it.finished } == true
 
@@ -170,19 +189,11 @@ fun RiderHomeScreen(onBack: () -> Unit, onLive: () -> Unit, onHistory: () -> Uni
                 )
             }
 
-            Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Lock, contentDescription = null, tint = Palette.Faint, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Records only while a journey runs; you stop it any time. No name, no phone number, no audio.",
-                    color = Palette.Faint, fontSize = 12.sp, lineHeight = 16.sp,
-                )
-            }
             Spacer(Modifier.height(8.dp))
         }
 
         // Primary action lives at the bottom, under the thumb, and is always the same size.
-        Box(Modifier.padding(horizontal = Dimens.Gutter, vertical = 12.dp)) {
+        Column(Modifier.padding(horizontal = Dimens.Gutter, vertical = 12.dp)) {
             val ready = mount != null && eta != null
             when {
                 !granted -> BigButton(
@@ -195,20 +206,32 @@ fun RiderHomeScreen(onBack: () -> Unit, onLive: () -> Unit, onHistory: () -> Uni
                 )
                 else -> BigButton(
                     "Start journey",
-                    sub = if (ready) null else "Choose phone placement and ETA first",
                     height = Dimens.HeroButton,
                     enabled = ready,
                     onClick = {
                         val m = mount ?: return@BigButton
                         val e = eta ?: return@BigButton
+                        if (!hasBluetooth(context)) bluetoothLauncher.launch(BLUETOOTH_PERMISSIONS)
                         ActiveJourney.clearFinished()
                         JourneyTrackingService.start(context, m, e)
                         onLive()
                     },
                 )
             }
+            Spacer(Modifier.height(10.dp))
+            Text(ConsentText, color = Palette.Muted, fontSize = 11.sp, lineHeight = 16.sp)
         }
     }
+}
+
+/** Shown under Start journey; the two document names are underlined like links. */
+private val ConsentText = buildAnnotatedString {
+    append("By clicking Start journey, you agree to Ridelog's ")
+    withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) { append("Terms of Use") }
+    append(" and ")
+    withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) { append("Privacy Policy") }
+    append(". Ridelog may send you communications; you may change your preferences in your account settings. ")
+    append("We'll never post without your permission.")
 }
 
 /** Past rides, newest first; reached from the history icon on rider home. */
@@ -349,6 +372,18 @@ private fun StopSlider(stops: List<Int>, value: Int?, onChange: (Int) -> Unit) {
     }
 }
 
+/** Whether the ESP32 meter module (display, LEDs, gas sensor) is connected. */
+@Composable
+private fun ModuleLight(state: Esp32Link.State) {
+    val (label, ok) = when (state) {
+        Esp32Link.State.CONNECTED -> "Meter on" to true
+        Esp32Link.State.SEARCHING -> "Finding meter" to null
+        Esp32Link.State.UNAVAILABLE -> "Bluetooth off" to false
+        Esp32Link.State.OFF -> "No meter" to null
+    }
+    StatusLight(label, ok, Modifier.semantics(mergeDescendants = true) { contentDescription = "Meter module: $label" })
+}
+
 @Composable
 private fun RunningBanner(s: ActiveJourneyState, onClick: () -> Unit) {
     Surface(
@@ -368,14 +403,31 @@ private fun RunningBanner(s: ActiveJourneyState, onClick: () -> Unit) {
     }
 }
 
-/** One saved journey in a list. Fixed height; long titles ellipsize instead of growing the row. */
+/**
+ * One saved journey in a list. Fixed height; long titles ellipsize instead of growing the row.
+ * With [onLongClick] it can be selected: [selecting] swaps the chevron for a tick circle.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun JourneyRow(title: String, sub: String, onClick: () -> Unit, late: Boolean? = null, tag: (@Composable () -> Unit)? = null) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(72.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = Palette.Surface,
+internal fun JourneyRow(
+    title: String,
+    sub: String,
+    onClick: () -> Unit,
+    late: Boolean? = null,
+    tag: (@Composable () -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    selecting: Boolean = false,
+    selected: Boolean = false,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .clip(shape)
+            .background(if (selected) Palette.AutoYellow.copy(alpha = 0.16f) else Palette.Surface)
+            .border(if (selected) 1.5.dp else 0.dp, if (selected) Palette.AutoYellow else Color.Transparent, shape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             // late / on time marker, reserved even when unknown
@@ -397,7 +449,25 @@ internal fun JourneyRow(title: String, sub: String, onClick: () -> Unit, late: B
                 Spacer(Modifier.width(8.dp))
                 tag()
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Palette.Muted, modifier = Modifier.size(28.dp))
+            if (selecting) {
+                // Same tick circle as the option tiles; rows that can't be selected (samples) show none.
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    if (onLongClick != null) {
+                        Box(
+                            Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(if (selected) Palette.AutoYellow else Color.Transparent)
+                                .border(if (selected) 0.dp else 1.5.dp, Palette.Faint, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Palette.Ink, modifier = Modifier.size(15.dp))
+                        }
+                    }
+                }
+            } else {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Palette.Muted, modifier = Modifier.size(28.dp))
+            }
         }
     }
 }
@@ -430,6 +500,7 @@ fun LiveJourneyScreen(onBack: () -> Unit, onFinished: (String) -> Unit) {
     val s = state
     Column(Modifier.fillMaxSize()) {
         TopBar(if (s?.simulated == true) "Demo ride" else "Live journey", onBack) {
+            if (s != null && !s.finished) ModuleLight(s.module)
             IconButton(onClick = { confirmCancel = true }, enabled = s != null && !s.finished, modifier = Modifier.size(52.dp)) {
                 Box(Modifier.size(34.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, contentDescription = "Cancel journey", tint = Palette.Ink, modifier = Modifier.size(20.dp))
@@ -475,7 +546,7 @@ fun LiveJourneyScreen(onBack: () -> Unit, onFinished: (String) -> Unit) {
             } else {
                 key(m.phase) {
                     SwipeToConfirm(
-                        "Swipe · ${PhaseText.action(m.phase)}",
+                        PhaseText.action(m.phase),
                         onConfirm = { JourneyTrackingService.nextPhase(context) },
                         color = if (m.phase == Phase.ARRIVED) Palette.AutoGreen else Palette.AutoYellow,
                     )
